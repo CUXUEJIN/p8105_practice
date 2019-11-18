@@ -1,0 +1,234 @@
+---
+title: "leaflet"
+author: "xj2249"
+date: "11/4/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(leaflet)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE,
+	fig.width = 8, 
+	fig.height = 6,
+	out.width = "90%"
+)
+
+theme_set(theme_minimal() +  theme(plot.title = element_text(hjust = 0.5))) 
+```
+
+# washington dataset
+## read in the data 
+```{r}
+hom_df <- 
+        read_csv("./data/homicide-data.csv", na = c("", "NA", "Unknown")) %>% 
+        mutate(
+                resolution = case_when(
+                        disposition == "Closed without arrest" ~ "unsolved",
+                        disposition == "Open/No arrest"        ~ "unsolved",
+                        disposition == "Closed by arrest"      ~ "solved")
+                ) %>% 
+        filter(!(city == "Tulsa" & state == "AL"))
+```
+
+## Is there a relationship between race and whether or not the case is resolved or not
+```{r}
+hom_df %>% 
+        group_by(victim_race) %>% 
+        summarise(solve_rate = sum(resolution == "solved")/n()) %>% 
+        arrange(desc(solve_rate))
+```
+
+## chi-squared test
+```{r}
+hom_df %>% 
+        mutate(victim_race = factor(victim_race),
+               resolution = factor(resolution)) %>% 
+        group_by(victim_race) %>% 
+        summarise(hom_solved = sum(resolution == "solved"),
+                  hom_unsolved = sum(resolution == "unsolved")) 
+
+tab1 <- table(hom_df$victim_race,hom_df$resolution) 
+
+tab1 %>% 
+        prop.table(1) %>% 
+        round(digits = 2) 
+
+chisq.test(tab1)
+```
+
+# Markers
+## Icon Markers—— makeicon/icons/iconlist
+```{r}
+map <- hom_df %>% 
+        sample_n(10) %>% 
+        view()
+
+
+cry_happy_icons <-
+        icons(
+                iconUrl = ifelse(map$resolution == "solved",
+                                 "./image/happy.png",
+                                 "./image/cry.png"),
+                iconHeight = 20, iconWidth = 20
+        )
+
+# try icon list
+cry_happy_icon_list <- iconList(
+                cry = makeIcon(iconUrl = "./image/cry.png",iconWidth = 20, iconHeight = 20 ), 
+                happy = makeIcon(iconUrl =  "./image/happy.png",iconWidth = 20, iconHeight = 20 )
+                )
+
+play_with_icon <- function(icon = NULL) {
+        map %>% 
+        mutate(
+                icon_type = ifelse(resolution == "solved",
+                                   "happy", 
+                                   "cry"),
+                icon_type = factor(icon_type)
+                ) %>% 
+        leaflet() %>% 
+        addTiles() %>% 
+        addProviderTiles(providers$Stamen.TonerLines,
+                         options = providerTileOptions(opacity = 0.35)) %>%
+        addProviderTiles(providers$Stamen.TonerLabels) %>% 
+        addMarkers(~lon, ~lat , 
+                   popup = ~str_c(city,state,sep = " of "), 
+                   icon = icon)
+}
+### "~"  is quite tricky !!! Attention !
+```
+
+## Marker Clusters
+```{r}
+map %>% 
+        mutate(
+                icon_type = ifelse(resolution == "solved",
+                                   "happy", 
+                                   "cry"),
+                icon_type = factor(icon_type)
+                ) %>% 
+        leaflet() %>% 
+        addTiles() %>% 
+        addProviderTiles(providers$Stamen.TonerLines,
+                         options = providerTileOptions(opacity = 0.35)) %>%
+        addProviderTiles(providers$Stamen.TonerLabels) %>% 
+        addMarkers(~lon, ~lat , 
+                   popup = ~str_c(city,state,sep = " of "), 
+                   icon = cry_happy_icons,
+                   clusterOptions = markerClusterOptions()) %>% 
+        addCircleMarkers()
+```
+
+## Circle Markers
+```{r}
+pal <- colorFactor(c("navy","red"), domain = c("unsolved","solved"))
+
+leaflet(map) %>% 
+        addTiles() %>%
+        addCircleMarkers(
+                radius = ~ifelse(resolution == "unsolved", 3, 5),
+                color = ~pal(resolution),
+                stroke = FALSE, fillOpacity = 0.5,
+                popup = ~state, label = ~state
+                )
+
+```
+
+
+## Awesome icons：This is the example(my own trial doesn't work)
+```{r}
+df.20 <- quakes[1:20,]
+
+getColor <- function(quakes) {
+  sapply(quakes$mag, function(mag) {
+  if(mag <= 4) {
+    "green"
+  } else if(mag <= 5) {
+    "orange"
+  } else {
+    "red"
+  } })
+}
+
+icons <- awesomeIcons(
+  icon = 'ios-close',
+  iconColor = 'black',
+  library = 'ion',
+  markerColor = getColor(df.20)
+)
+
+leaflet(df.20) %>% addTiles() %>%
+  addAwesomeMarkers(~long, ~lat, icon = icons, label=~as.character(mag))
+```
+
+```{r}
+df_20 <- map %>% 
+        sample_n(5)
+
+getColor <- function(map) {
+  sapply(map$resolution, function(resolution) {
+  if(resolution == "solved") {
+    "green"
+  } else {
+    "red"
+  } })
+}
+
+icons <- awesomeIcons(
+  icon = 'ios-close',
+  iconColor = 'black',
+  library = 'ion',
+  markerColor = getColor(df_20)
+)
+
+map %>% 
+        leaflet() %>% 
+        addTiles() %>% 
+        addAwesomeMarkers(~lon, ~lat, icon = icons, label = ~as.character(resolution))
+
+map %>% view()
+```
+
+
+
+
+
+# other 
+```{r}
+library(maps)
+library(RColorBrewer)
+mapStates <- map("state", fill = TRUE, plot = FALSE)
+
+leaflet(data = mapStates) %>% 
+        addTiles() %>% 
+        addPolygons(
+                color = "#444444", weight = 1, smoothFactor = 0.5,opacity = 1.0, fillOpacity = 0.5,
+                fillColor = brewer.pal(10, name = "Paired"), 
+                highlightOptions = highlightOptions(color = "white", weight = 1, bringToFront = TRUE)
+                    )
+
+
+
+```
+
+## Coloring continuous data
+```{r}
+
+
+```
+
+# try map 
+```{r}
+hom_df
+hom_df[1:4]
+map(hom_df,extract(),c("victim_last"))
+```
+
+
+
+
