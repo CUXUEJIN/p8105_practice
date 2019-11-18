@@ -122,6 +122,9 @@ so ...
 ```{r}
 cv_df <-
         crossv_mc(nonlin_df,100)
+
+nonlin_df %>%  crossv_kfold(k = 20)
+?crossv_kfold
 str(cv_df %>% pull(train) %>% .[[1]])
 
 cv_df %>% pull(train) %>% .[[1]] %>% as_tibble
