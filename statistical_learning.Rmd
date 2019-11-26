@@ -1,0 +1,80 @@
+---
+title: "statistical_learning"
+author: "xj2249"
+date: "2019/11/26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(glmnet)
+```
+
+lasso
+to use lasso, we'll look at "glmnet"
+```{r}
+bwt_df = 
+  read_csv("./data/birthweight.csv") %>% 
+  janitor::clean_names() %>%
+  mutate(
+    babysex = as.factor(babysex),
+    babysex = fct_recode(babysex, "male" = "1", "female" = "2"),
+    frace = as.factor(frace),
+    frace = fct_recode(frace, "white" = "1", "black" = "2", "asian" = "3", 
+                       "puerto rican" = "4", "other" = "8"),
+    malform = as.logical(malform),
+    mrace = as.factor(mrace),
+    mrace = fct_recode(mrace, "white" = "1", "black" = "2", "asian" = "3", 
+                       "puerto rican" = "4")) %>% 
+  sample_n(200)
+```
+
+get inputs for `glmnet`
+```{r}
+y = bwt_df$bwt
+x = model.matrix(bwt~.,bwt_df)[,-1]
+```
+
+you don't have to do it, but it's useful to do.
+```{r}
+lambda = 10^(seq(3, -2, -0.1))
+
+lasso_fit = 
+        glmnet(x, y, lambda = lambda)
+
+lasso_cv =
+  cv.glmnet(x, y, lambda = lambda)
+
+lambda_opt = lasso_cv$lambda.min
+```
+
+when lambda is very large, penalty term is everything and so only intercept in the model, when lambda is small, SSE matters, get more predators.
+```{r}
+broom::tidy(lasso_fit) %>% 
+  select(term, lambda, estimate) %>% 
+  complete(term, lambda, fill = list(estimate = 0) ) %>% 
+  filter(term != "(Intercept)") %>% 
+  ggplot(aes(x = log(lambda, 10), y = estimate, group = term, color = term)) + 
+  geom_path() + 
+  geom_vline(xintercept = log(lambda_opt, 10), color = "blue", size = 1.2) 
+```
+each line is a paremeter. 
+
+
+```{r}
+broom::tidy(lasso_cv) %>% 
+  ggplot(aes(x = log(lambda, 10), y = estimate)) + 
+  geom_point()  
+```
+estimate = prediction error
+so the 1 is the best, with lowest prediction error
+
+lasso is all about prediction.
+you don't care about interpretaion, coefficient, significant.
+
+**Make prediction with accuracy!**
+
+```{r}
+
+```
+
