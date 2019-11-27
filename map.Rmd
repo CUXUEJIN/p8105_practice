@@ -1,0 +1,117 @@
+---
+title: "Untitled"
+author: "xj2249"
+date: "2019/11/26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(countrycode)
+devtools::install_github("dgrtwo/gganimate", ref = "26ec501")
+library(gganimate)
+library(rworldmap)
+```
+
+# data 
+```{r}
+world <- 
+        read_csv("./data/master.csv") %>% 
+        rename( "rate_standardized" = "suicides/100k pop") %>% 
+        mutate(suicides = population * rate_standardized) %>%
+        group_by(country,year) %>% 
+        summarise(rate = sum(suicides)/sum(population)) %>% 
+        as.data.frame()
+
+world
+str(world )
+
+world_clean <-
+  world %>% 
+  mutate(
+    country = countrycode(country,'country.name', 'iso3c')
+  ) 
+vmax <- world_clean %>% pull(rate) %>% max(na.rm=T)
+vmin <- world_clean %>% pull(rate) %>% min(na.rm=T)
+
+names(world_clean)
+```
+
+```{r}
+malMap <- joinCountryData2Map(world, joinCode = "NAME",
+  nameJoinColumn = "country")
+# it's better to use ISO3
+malMap2 <- joinCountryData2Map(world_clean, joinCode = "ISO3",
+  nameJoinColumn = "country")
+
+mapCountryData(malMap2, nameColumnToPlot = "rate",catMethod = "pretty",oceanCol = "steelblue1",missingCountryCol = gray(.8))
+```
+
+
+try animation
+```{r}
+year = distinct(world_clean,year)
+
+limits <- range(world_clean$rate)  # custom range
+legend.limits <- seq(min(limits), max(limits), len = 101)
+```
+
+
+```{r}
+animation::saveGIF(for (i in min(year):max(year)) {
+  map_year = 
+    world_clean %>% 
+    filter(year == i) %>% 
+    joinCountryData2Map(joinCode = "ISO3",nameJoinColumn = "country")
+  
+mapParams <- mapCountryData(map_year, 
+                            nameColumnToPlot = "rate",
+                            catMethod = legend.limits,
+                            oceanCol = "steelblue1",
+                            missingCountryCol = gray(.8), 
+                            mapTitle = str_c("Year",i,sep =":"),
+                            addLegend=FALSE)
+    
+do.call(addMapLegend, 
+        c(mapParams, 
+          legendLabels = "limits",
+          legendWidth = 0.5,
+          legendShrink = 0.8))
+}
+, movie.name = "position.gif", ani.width = 1000, 
+      ani.height = 800)
+```
+
+
+```{r}
+
+malMap2 %>% view()
+# plot
+
+world_plot <- 
+  ggplot(data = malMap2) +
+  geom_polygon(aes(x = long, y = lat, group = group, fill = rate, frame = year),color = "gray90") +
+  viridis::scale_fill_viridis(name = "Suicide rate", begin = 0, end = 1, limits = c(vmin,vmax), na.value = "gray99") +
+  theme_void() +
+  guides(fill = guide_colorbar(title.position = "top")) +
+        labs(title = "Suicide rate: ") +
+        theme(plot.title = element_text(hjust = 0.5, vjust = 0.05, size=25)) +
+        theme(plot.caption = element_text(hjust = 0, color = "gray40", size=15)) +
+        coord_cartesian(xlim = c(-11807982, 14807978)) +
+        theme( legend.position = c(.5, .08), 
+               legend.direction = "horizontal", 
+               legend.title.align = 0,
+               legend.key.size = unit(1.3, "cm"),
+               legend.title = element_text(size = 17), 
+               legend.text = element_text(size = 13) )
+```
+
+
+```{r}
+# save gif
+gg_animate(world_plot, "world_map.gif", title_frame =T, 
+             ani.width = 1600, ani.height = 820, dpi = 800, interval = .4)
+             
+```
+
