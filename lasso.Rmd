@@ -1,0 +1,126 @@
+---
+title: "lasso_regression_statquest"
+author: "xj2249"
+date: "11/28/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(glmnet)
+library(caret)
+set.seed(11)
+```
+
+data for practice
+```{r}
+bwt_df = 
+  read_csv("./data/birthweight.csv") %>% 
+  janitor::clean_names() %>%
+  mutate(
+    babysex = as.factor(babysex),
+    babysex = fct_recode(babysex, "male" = "1", "female" = "2"),
+    frace = as.factor(frace),
+    frace = fct_recode(frace, "white" = "1", "black" = "2", "asian" = "3", 
+                       "puerto rican" = "4", "other" = "8"),
+    malform = as.logical(malform),
+    mrace = as.factor(mrace),
+    mrace = fct_recode(mrace, "white" = "1", "black" = "2", "asian" = "3", 
+                       "puerto rican" = "4")) %>% 
+  sample_n(200)
+```
+
+
+There are two ways to do cv.
+`glmet.cv` from `glmnet`
+https://web.stanford.edu/~hastie/glmnet/glmnet_alpha.html(developer's website)
+https://www.youtube.com/watch?v=fAPCaue8UKQ
+or  
+`train` from `caret`
+https://www.youtube.com/watch?v=_3xMSbIde2I
+
+# glmet.cv
+y and x matrix(delete intercept)
+```{r}
+x = model.matrix(bwt ~ ., bwt_df)[,-1]
+y = bwt_df$bwt
+```
+
+jeff's version
+```{r}
+lambda = 10^(seq(3, -2, -0.1))
+
+lasso_fit = glmnet(x, y, lambda = lambda)
+
+lasso_cv = cv.glmnet(x, y, lambda = lambda)
+
+lambda_opt = lasso_cv$lambda.min
+
+```
+
+my version
+```{r}
+
+lasso_fit1 = glmnet(x, y, alpha = 1,lambda = lambda)
+lasso_cv1 = cv.glmnet(x, y, alpha = 1,lambda = lambda)
+
+```
+
+plot 
+```{r}
+broom::tidy(lasso_fit1) %>% 
+  select(term, lambda, estimate) %>% 
+  complete(term, lambda, fill = list(estimate = 0) ) %>% 
+  filter(term != "(Intercept)") %>% 
+  ggplot(aes(x = log(lambda, 10), y = estimate, group = term, color = term)) + 
+  geom_line() + 
+  geom_vline(xintercept = log(lambda_opt, 10), color = "blue", size = 1.2) +
+  theme(legend.position = "none")
+# it seems that we do not need complete why?
+
+broom::tidy(lasso_cv1) %>% 
+  ggplot(aes(x = log(lambda, 10), y = estimate)) + 
+  geom_point()  
+# the same as "plot(cv)"
+plot(lasso_cv1)
+```
+
+coefficients
+```{r}
+# jeff
+lasso_fit = glmnet(x, y, lambda = lambda_opt)
+broom::tidy(lasso_fit) 
+
+# my version
+lasso_optfit = glmnet(x, y, alpha = 1,lambda = lasso_cv1$lambda.min)
+broom::tidy(lasso_optfit)  
+
+```
+
+jeff doesn't specify the alpha, so i am not sure he's doing lasso or the plastic net(?)  nope! the default alpha = 1!!! Great!
+
+# Try the `train`
+```{r}
+custom <- trainControl(method = "cv",
+                       number = 10,
+                       verboseIter = T)
+lasso_train <- train(bwt ~.,
+                     bwt_df,
+                     method = "glmnet",
+                     tuneGrid = expand.grid(alpha = 1,
+                                            lambda = lambda),
+                     trControl = custom
+                     )
+plot(lasso_train$finalModel, xvar = "lambda",label = T)
+plot(lasso_train$finalModel, xvar = "dev",label = T)
+
+```
+
+Get the same result.
+
+
+```{r}
+bwt_df
+```
+
