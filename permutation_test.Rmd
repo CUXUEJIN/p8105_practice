@@ -1,0 +1,53 @@
+---
+title: "permutation_test"
+author: "xj2249"
+date: "2019/11/29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+```{r}
+chick_df <- 
+        read_csv("./data/ChickData.csv") %>% 
+        mutate(feed = factor(feed))
+        
+test_stat <- 
+        abs(mean(filter(chick_df,feed =="casein") %>% pull(weight))-
+            mean(filter(chick_df,feed =="meatmeal") %>% pull(weight)))
+
+```
+
+
+```{r}
+set.seed(1979)
+
+chick_df %>% 
+        mutate(
+                perm =  rerun(10,sample(weight,size = 23,replace = F)) 
+        )
+
+
+ rerun(10,sample(chick_df$weight,size = 23,replace = F)) %>% 
+        map(a,~rbind(.x))
+
+ rerun(10,sample(chick_df$weight,size = 23,replace = F)) %>% 
+         map(~tibble(.x))
+
+chick_df
+library(mosaic)
+mean(weight~shuffle(feed),data =chick_df) %>% diff() %>% abs()
+
+rerun(10,mean(weight~shuffle(feed),data =chick_df) %>% diff() %>% abs()) %>% 
+        map_df(~ tibble(abs = .x))
+
+
+rerun(.n = 10, rnorm(10)) %>%
+  map_df(~ tibble(mean = mean(.x),
+                  sd = sd(.x),
+                  median = median(.x)))
+```
+

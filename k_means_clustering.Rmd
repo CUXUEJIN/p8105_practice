@@ -1,0 +1,128 @@
+---
+title: "k_means_clustering"
+author: "xj2249"
+date: "11/28/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+# Demo
+```{r}
+## Step 1: make up some data
+x <- rbind(
+  matrix(rnorm(100, mean=0, sd = 0.3), ncol = 2), # cluster 1
+  matrix(rnorm(100, mean = 1, sd = 0.3), ncol = 2), # cluster 2
+  matrix(c(rnorm(50, mean = 1, sd = 0.3), # cluster 3
+    rnorm(50, mean = 0, sd = 0.3)), ncol = 2))
+colnames(x) <- c("x", "y")
+ 
+## Step 2: show the data without clustering
+plot(x)
+ 
+## Step 3: show the data with the known clusters (this is just so we
+## can see how well k-means clustering recreates the original clusters we
+## created in step 1)
+colors <- as.factor(c(
+  rep("c1", times=50),
+  rep("c2", times=50),
+  rep("c3", times=50)))
+plot(x, col=colors)
+ 
+## Step 3: cluster the data
+## NOTE: nstart=25, so kmeans() will cluster using 25 different starting points
+## and return the best cluster.
+cl <- kmeans(x, centers=3, nstart=25)
+ 
+## Step 4: plot the data, coloring the points with the clusters
+plot(x, col = cl$cluster)
+```
+
+# jeff's example
+```{r}
+poke_df = 
+  read_csv("./data/pokemon.csv") %>% 
+  janitor::clean_names() %>% 
+  select(hp, speed)
+```
+
+plot
+```{r}
+plot(poke_df)
+```
+
+
+```{r}
+kmeans(poke_df,centers = 3,nstart = 5) %>% .$centers
+kmeans(poke_df,centers = 3,nstart = 5) %>% .$cluster
+kmeanx_fit <- kmeans(poke_df,centers = 3, nstart = 100) 
+poke_cl <- broom::augment(kmeanx_fit,poke_df)
+
+# not use augment
+poke_df %>% 
+        mutate(cluster =  kmeanx_fit[["cluster"]])
+
+poke_cl %>% 
+  ggplot(aes(x = hp, y = speed, color = .cluster)) +
+  geom_point()
+
+```
+
+```{r}
+clusts =
+  tibble(k = 2:4) %>%
+  mutate(
+    km_fit =    map(k, ~kmeans(poke_df, .x)),
+    augmented = map(km_fit, ~broom::augment(.x, poke_df)),
+    tidied = map(km_fit,broom::tidy)
+  )
+```
+
+plot 
+```{r}
+center <-
+        clusts %>% 
+        unnest(tidied) %>% 
+        rename("hp"= x1, "speed" = x2)
+center %>%
+        ggplot(aes(x = hp, y = speed, shape = cluster,size = 10)) +
+        geom_point()+
+        facet_grid(k~.) 
+
+        
+# horizontal
+clusts %>% 
+        select(-km_fit) %>% 
+        unnest(augmented) %>%
+        ggplot(aes(x = hp, y = speed)) +
+        geom_point(aes(color = .cluster))+
+        facet_grid(k~.) +
+        geom_point(aes(x = hp, y= speed),shape = "x",size = 5,data = center)
+# it's wierd, have to have "color" to make it work.
+# oh! if "aes(color = .cluster)" is in the ggplot, it will not work, but if it's in geom_point, it works! yeah!
+        
+
+# vertical 
+clusts %>% 
+        select(-km_fit) %>% 
+        unnest(augmented) %>% 
+        ggplot(aes(x = hp, y = speed, color = .cluster)) +
+        geom_point()+
+        facet_grid(~k) 
+        
+# The historical formula interface is also available(above), so that's the historical formula. 
+
+```
+
+
+# how to find the k
+```{r}
+library(factoextra)
+# elbow method 
+fviz_nbclust(poke_df, kmeans, method = "wss", k.max = 10) + theme_minimal() + ggtitle("the Elbow Method")
+```
+the elbow is at "3" or "4", so emmm (actually, that's disadvantage)
+
